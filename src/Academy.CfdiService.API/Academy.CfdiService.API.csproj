@@ -12,6 +12,8 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\Academy.CfdiService.Application\Academy.CfdiService.Application.csproj" />
+    <ProjectReference Include="..\Academy.CfdiService.Infrastructure\Academy.CfdiService.Infrastructure.csproj" />
     <ProjectReference Include="..\Academy.CfdiService.Presentation\Academy.CfdiService.Presentation.csproj" />
   </ItemGroup>
 
