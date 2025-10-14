@@ -59,6 +59,6 @@ app.UseHttpsRedirection();
 
 app.UseRequestTimeouts();
 
-app.MapFiscalSituationEndpoints();
+app.MapFiscalSituationModule();
 
 app.Run();

@@ -8,9 +8,9 @@ using Microsoft.AspNetCore.Routing;
 
 namespace Academy.CfdiService.Presentation.FiscalSituation;
 
-public static class FiscalSituationEndpoints
+public static class FiscalSituationModule
 {
-    public static RouteGroupBuilder MapFiscalSituationEndpoints(this IEndpointRouteBuilder routes)
+    public static RouteGroupBuilder MapFiscalSituationModule(this IEndpointRouteBuilder routes)
     {
         var group = routes.MapGroup("/api/fiscal-situation");
 
