@@ -1,3 +1,4 @@
+using Academy.CfdiService.Application.Abstractions;
 using Academy.CfdiService.Application.FiscalSituation.Models;
 using Academy.CfdiService.Domain.Repositories;
 using MediatR;
@@ -7,15 +8,27 @@ namespace Academy.CfdiService.Application.FiscalSituation.Queries.GetFiscalSitua
 public sealed class GetFiscalSituationQueryHandler : IRequestHandler<GetFiscalSituationQuery, FiscalSituationDto?>
 {
     private readonly ICfdiReadRepository _repository;
+    private readonly ICacheService _cacheService;
+    private static readonly TimeSpan CacheDuration = TimeSpan.FromDays(1);
 
-    public GetFiscalSituationQueryHandler(ICfdiReadRepository repository)
+    public GetFiscalSituationQueryHandler(ICfdiReadRepository repository, ICacheService cacheService)
     {
         _repository = repository;
+        _cacheService = cacheService;
     }
 
     public async Task<FiscalSituationDto?> Handle(GetFiscalSituationQuery request, CancellationToken cancellationToken)
     {
-        var documents = await _repository.GetByRfcAsync(request.Rfc, cancellationToken);
+        var normalizedRfc = request.Rfc.Trim().ToUpperInvariant();
+        var cacheKey = $"fiscal-situation:{normalizedRfc}";
+
+        var cached = await _cacheService.GetAsync<FiscalSituationDto>(cacheKey, cancellationToken);
+        if (cached is not null)
+        {
+            return cached;
+        }
+
+        var documents = await _repository.GetByRfcAsync(normalizedRfc, cancellationToken);
 
         if (documents.Count == 0)
         {
@@ -23,10 +36,10 @@ public sealed class GetFiscalSituationQueryHandler : IRequestHandler<GetFiscalSi
         }
 
         var issuedCount = documents.Count(cfdi =>
-            string.Equals(cfdi.IssuerRfc, request.Rfc, StringComparison.OrdinalIgnoreCase));
+            string.Equals(cfdi.IssuerRfc, normalizedRfc, StringComparison.OrdinalIgnoreCase));
 
         var receivedCount = documents.Count(cfdi =>
-            string.Equals(cfdi.ReceiverRfc, request.Rfc, StringComparison.OrdinalIgnoreCase));
+            string.Equals(cfdi.ReceiverRfc, normalizedRfc, StringComparison.OrdinalIgnoreCase));
 
         var latestIssueDate = documents.Max(cfdi => (DateTime?)cfdi.IssueDate);
         var lastUpdated = documents.Max(cfdi => (DateTime?)cfdi.LastUpdated);
@@ -42,13 +55,17 @@ public sealed class GetFiscalSituationQueryHandler : IRequestHandler<GetFiscalSi
             .ToList()
             .AsReadOnly();
 
-        return new FiscalSituationDto(
-            request.Rfc,
+        var fiscalSituation = new FiscalSituationDto(
+            normalizedRfc,
             issuedCount,
             receivedCount,
             documents.Count,
             latestIssueDate,
             lastUpdated,
             summaries);
+
+        await _cacheService.SetAsync(cacheKey, fiscalSituation, CacheDuration, cancellationToken);
+
+        return fiscalSituation;
     }
 }
