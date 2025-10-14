@@ -1,3 +1,4 @@
+using System;
 using Academy.CfdiService.Domain.Repositories;
 using Academy.CfdiService.Infrastructure.Persistence;
 using Academy.CfdiService.Infrastructure.Repositories;
@@ -11,11 +12,28 @@ public static class DependencyInjection
 {
     public static IServiceCollection AddInfrastructure(this IServiceCollection services, IConfiguration configuration)
     {
-        var connectionString = configuration.GetConnectionString("CfdiDatabase")
-            ?? throw new InvalidOperationException("Connection string 'CfdiDatabase' was not found.");
+        var provider = configuration["DatabaseOptions:Provider"] ?? "sqlserver";
+        var connectionStringName =
+            configuration["DatabaseOptions:ConnectionStringName"] ?? "DefaultConnection";
+
+        var connectionString = configuration.GetConnectionString(connectionStringName);
+
+        if (string.IsNullOrWhiteSpace(connectionString))
+        {
+            throw new InvalidOperationException(
+                $"Connection string '{connectionStringName}' was not found or is empty.");
+        }
 
         services.AddDbContext<CfdiDbContext>(options =>
-            options.UseSqlServer(connectionString));
+        {
+            if (string.Equals(provider, "sqlserver", StringComparison.OrdinalIgnoreCase))
+            {
+                options.UseSqlServer(connectionString);
+                return;
+            }
+
+            throw new InvalidOperationException($"Unsupported database provider '{provider}'.");
+        });
 
         services.AddScoped<ICfdiReadRepository, EfCfdiReadRepository>();
 
