@@ -9,7 +9,7 @@ public sealed class GetFiscalSituationQueryHandler : IRequestHandler<GetFiscalSi
 {
     private readonly ICfdiReadRepository _repository;
     private readonly ICacheService _cacheService;
-    private static readonly TimeSpan CacheDuration = TimeSpan.FromDays(1);
+    private static readonly TimeSpan CacheDuration = TimeSpan.FromMinutes(30);
 
     public GetFiscalSituationQueryHandler(ICfdiReadRepository repository, ICacheService cacheService)
     {
