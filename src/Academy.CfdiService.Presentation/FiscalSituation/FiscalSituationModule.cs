@@ -1,3 +1,4 @@
+using Academy.CfdiService.Application.Common.Helpers;
 using Academy.CfdiService.Application.FiscalSituation.Models;
 using Academy.CfdiService.Application.FiscalSituation.Queries.GetFiscalSituation;
 using MediatR;
@@ -7,6 +8,7 @@ using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.OpenApi.Any;
 using Microsoft.OpenApi.Models;
+using Microsoft.AspNetCore.Mvc;
 
 namespace Academy.CfdiService.Presentation.FiscalSituation;
 
@@ -18,11 +20,23 @@ public static class FiscalSituationModule
 
         group.MapGet(
                 "/{rfc}",
-                async Task<Results<Ok<FiscalSituationDto>, NotFound>> (
+                async Task<Results<Ok<FiscalSituationDto>, NotFound, BadRequest<ProblemDetails>>> (
                     string rfc,
                     ISender sender,
                     CancellationToken cancellationToken) =>
                 {
+                    if (!RfcValidator.IsValid(rfc))
+                    {
+                        var problem = new ProblemDetails
+                        {
+                            Title = "Invalid RFC format",
+                            Detail = "The provided value does not match the individual (13 characters) or corporate (12 characters) RFC formats.",
+                            Status = StatusCodes.Status400BadRequest
+                        };
+
+                        return TypedResults.BadRequest(problem);
+                    }
+
                     var query = new GetFiscalSituationQuery(rfc);
                     var result = await sender.Send(query, cancellationToken);
 
@@ -35,20 +49,19 @@ public static class FiscalSituationModule
                 })
             .WithName("GetFiscalSituation")
             .WithTags("Fiscal Situation")
-            .WithSummary("Obtiene la situación fiscal (CFDI emitidos/recibidos) para un RFC.")
-            .WithDescription("Devuelve conteos y detalles de CFDI relacionados con el RFC proporcionado. "
-                             + "Incluye comprobantes emitidos y recibidos, fechas relevantes y estado.")
+            .WithSummary("Retrieves the fiscal situation (issued and received CFDI) for an RFC.")
+            .WithDescription("Returns counts and document details related to the provided RFC, including issued and received invoices, key dates, and current status.")
             .Produces<FiscalSituationDto>(StatusCodes.Status200OK, "application/json")
+            .Produces<ProblemDetails>(StatusCodes.Status400BadRequest, "application/json")
             .Produces(StatusCodes.Status404NotFound)
             .WithOpenApi(operation =>
             {
                 operation.OperationId = "GetFiscalSituation";
-                operation.Summary = "Consulta la situación fiscal de un RFC.";
+                operation.Summary = "Gets the fiscal situation for an RFC.";
                 operation.Description =
-                    "Permite recuperar información consolidada de los CFDI en los que participa el RFC dado. "
-                    + "La búsqueda incluye CFDI emitidos y recibidos. Si no se encuentran registros, regresa 404.";
+                    "Retrieves consolidated information for every CFDI where the provided RFC appears as issuer or receiver. Returns 404 when no matching documents are found.";
 
-                operation.Parameters[0].Description = "RFC del emisor o receptor cuyos CFDI se desean consultar.";
+                operation.Parameters[0].Description = "RFC whose issued and received CFDI should be retrieved.";
                 operation.Parameters[0].Schema = new Microsoft.OpenApi.Models.OpenApiSchema
                 {
                     Type = "string",
@@ -57,7 +70,7 @@ public static class FiscalSituationModule
 
                 if (operation.Responses.TryGetValue(StatusCodes.Status200OK.ToString(), out var okResponse))
                 {
-                    okResponse.Description = "Consulta exitosa; devuelve la situación fiscal del RFC.";
+                    okResponse.Description = "Successful lookup that returns the RFC fiscal situation.";
 
                     if (okResponse.Content.TryGetValue("application/json", out var okMediaType))
                     {
@@ -65,9 +78,24 @@ public static class FiscalSituationModule
                     }
                 }
 
+                if (operation.Responses.TryGetValue(StatusCodes.Status400BadRequest.ToString(), out var badRequestResponse))
+                {
+                    badRequestResponse.Description = "The RFC value does not satisfy the individual or corporate RFC formats.";
+
+                    if (badRequestResponse.Content.TryGetValue("application/json", out var badRequestMediaType))
+                    {
+                        badRequestMediaType.Example = new OpenApiObject
+                        {
+                            ["title"] = new OpenApiString("Invalid RFC format"),
+                            ["status"] = new OpenApiInteger(StatusCodes.Status400BadRequest),
+                            ["detail"] = new OpenApiString("The provided value does not match the individual (13 characters) or corporate (12 characters) RFC formats.")
+                        };
+                    }
+                }
+
                 if (operation.Responses.TryGetValue(StatusCodes.Status404NotFound.ToString(), out var notFoundResponse))
                 {
-                    notFoundResponse.Description = "No se encontraron CFDI asociados al RFC proporcionado.";
+                    notFoundResponse.Description = "No CFDI records were found for the provided RFC.";
                 }
 
                 return operation;
